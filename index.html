@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Making your first Phaser 3 Game - Part 1</title>
+    <script src="//cdn.jsdelivr.net/npm/phaser@3.11.0/dist/phaser.js"></script>
+    <style type="text/css">
+      body {
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <script type="text/javascript">
+      var config = {
+        type: Phaser.AUTO,
+        width: 800,
+        height: 600,
+        physics: {
+          default: "arcade",
+          arcade: {
+            gravity: { y: 300 },
+            debug: false,
+          },
+        },
+        scene: {
+          preload: preload,
+          create: create,
+          update: update,
+        },
+      };
+
+      let game = new Phaser.Game(config);
+      let platforms;
+      let player;
+      let cursors;
+      let stars;
+      let score = 0;
+      let scoreText;
+      let bombs;
+      //here we load assets that we need to make the game work
+      function preload() {
+        this.load.image("sky", "assets/sky.png");
+        this.load.image("ground", "assets/platform.png");
+        this.load.image("star", "assets/star.png");
+        this.load.image("bomb", "assets/bomb.png");
+        //SPRITE SHEETS containthe animation for the movement of the player, size of the object relative to the screen
+        this.load.spritesheet("dude", "assets/dude.png", {
+          frameWidth: 32,
+          frameHeight: 48,
+        });
+      }
+
+      function create() {
+        //images are placed based on their center so if the center is halfway through your background you should have it cover everything
+        this.add.image(400, 300, "sky");
+        platforms = this.physics.add.staticGroup();
+        platforms.create(400, 568, "ground").setScale(2).refreshBody();
+        platforms.create(600, 400, "ground");
+        platforms.create(50, 250, "ground");
+        platforms.create(750, 220, "ground");
+        //also assets are added on top of each other so load bottom assets first
+
+        //add player to world sprite is the object that are controlled with the animation
+        player = this.physics.add.sprite(100, 450, "dude");
+
+        //this enables player and platforms to collide with destroying each other
+        this.physics.add.collider(player, platforms);
+        // allow player to bounce when he touches object
+        player.setBounce(0.2);
+        //allow player to touch world
+        player.setCollideWorldBounds(true);
+
+        //these are naimations for what happens when a sprite moves, in the sprite file there are 8 animations
+
+        //0 -3 for left
+        this.anims.create({
+          key: "left",
+          frames: this.anims.generateFrameNumbers("dude", { start: 0, end: 3 }),
+          frameRate: 10,
+          repeat: -1,
+        });
+
+        //4 for when the
+        this.anims.create({
+          key: "turn",
+          frames: [{ key: "dude", frame: 4 }],
+          frameRate: 20,
+        });
+
+        this.anims.create({
+          key: "right",
+          frames: this.anims.generateFrameNumbers("dude", { start: 5, end: 8 }),
+          frameRate: 10,
+          repeat: -1,
+        });
+
+        // adding stars
+
+        stars = this.physics.add.group({
+          key: "star",
+          repeat: 11,
+          setXY: { x: 12, y: 0, stepX: 70 },
+        });
+
+        stars.children.iterate(function (child) {
+          child.setBounceY(Phaser.Math.FloatBetween(0.4, 0.8));
+        });
+
+        //prevent stars fro  passing through platforms
+        this.physics.add.collider(stars, platforms);
+
+        //check if star overlaps with player and then call collect star method
+        this.physics.add.overlap(player, stars, collectStar, null, this);
+
+        //create a scoreboard
+        scoreText = this.add.text(16, 16, "score: 0", {
+          fontSize: "32px",
+          fill: "#000",
+        });
+
+        //adding bombs to the screen
+        bombs = this.physics.add.group();
+
+        //allow bombs to collide with platforms
+        this.physics.add.collider(bombs, platforms);
+
+        //what happens when player and bombs collide
+        this.physics.add.collider(player, bombs, hitBomb, null, this);
+      }
+
+      function update() {
+        cursors = this.input.keyboard.createCursorKeys();
+        if (cursors.left.isDown) {
+          player.setVelocityX(-160);
+
+          player.anims.play("left", true);
+        } else if (cursors.right.isDown) {
+          player.setVelocityX(160);
+
+          player.anims.play("right", true);
+        } else {
+          player.setVelocityX(0);
+
+          player.anims.play("turn");
+        }
+
+        if (cursors.up.isDown && player.body.touching.down) {
+          player.setVelocityY(-330);
+        }
+      }
+      //what happens when i overlap with a star
+      function collectStar(player, star) {
+        //disabke the star from the screen
+        star.disableBody(true, true);
+
+        //add 10 to my score
+        score += 10;
+        scoreText.setText("Score: " + score);
+
+        //allows bombs to join after stars become zero for the first time
+        if (stars.countActive(true) === 0) {
+          //if active stars is zero we reenable to stars
+          stars.children.iterate(function (child) {
+            child.enableBody(true, child.x, 0, true, true);
+          });
+          //then we check to see where the player is, we release bombs on opposite side of player
+          var x =
+            player.x < 400
+              ? Phaser.Math.Between(400, 800)
+              : Phaser.Math.Between(0, 400);
+
+          var bomb = bombs.create(x, 16, "bomb");
+          bomb.setBounce(1);
+          bomb.setCollideWorldBounds(true);
+          bomb.setVelocity(Phaser.Math.Between(-200, 200), 20);
+        }
+      }
+      //kill player restart game
+      function hitBomb(player, bomb) {
+        this.physics.pause(); // pause game physics
+
+        player.setTint(0xff0000); //set player color to red
+
+        player.anims.play("turn"); //let player phase screen
+
+        // this.gameOver = true;
+        this.registry.destroy(); // destroy registry
+        this.events.off(); // disable all active events
+        this.scene.restart(); // restart current scene
+      }
+    </script>
+  </body>
+</html>
